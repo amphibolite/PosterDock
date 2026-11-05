@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=800, height=480, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0B0C0F">
+<title>Smart Display</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;width:100%;overflow:hidden;background:#05060a}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"DejaVu Sans",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    -webkit-user-select:none;-moz-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;overscroll-behavior:none;
+    cursor:default;
+  }
+  #stage{
+    position:fixed;left:50%;top:50%;
+    width:800px;height:480px;
+    transform:translate(-50%,-50%) scale(1);
+    transform-origin:center center;
+    display:flex;overflow:hidden;
+    background:#0B0C0F;
+  }
+
+  /* ---------------- ART PANEL (left) ---------------- */
+  .panel-art{
+    position:relative;flex:0 0 320px;width:320px;height:480px;
+    overflow:hidden;background:#07080C;
+  }
+
+  .time-row{display:flex;align-items:flex-end;gap:8px}
+  .time{
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    font-size:43px;line-height:.88;letter-spacing:-2px;
+    font-variant-numeric:tabular-nums;
+    color:#F7F2E8;
+  }
+  .mer{
+    font-size:10px;font-weight:700;letter-spacing:.18em;color:#E9B44C;
+    padding-bottom:8px;
+  }
+  .date{
+    margin-top:14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:rgba(242,236,226,.52);
+  }
+  .rule{
+    height:1px;margin:13px 0 0;
+    background:linear-gradient(90deg,rgba(242,236,226,.18),rgba(242,236,226,.02));
+  }
+
+  .cal{margin-top:13px}
+  .cal-month{
+    font-size:10px;letter-spacing:.26em;text-transform:uppercase;
+    color:rgba(242,236,226,.6);
+  }
+  .cal-dow{
+    display:grid;grid-template-columns:repeat(7,1fr);gap:3px;
+    margin:7px 0 4px;
+  }
+  .cal-dow span{
+    text-align:center;font-size:8px;letter-spacing:.12em;
+    color:rgba(242,236,226,.26);text-transform:uppercase;
+  }
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .cal-cell{
+    height:17px;display:grid;place-items:center;border-radius:4px;
+    font-size:10px;font-variant-numeric:tabular-nums;
+    color:rgba(242,236,226,.7);
+  }
+  .cal-cell.is-weekend{color:rgba(242,236,226,.34)}
+  .cal-cell.is-today{
+    background:#E9B44C;color:#15120A;font-weight:700;
+  }
+
+  /* ---------------- INFO PANEL (right) ---------------- */
+  .panel-info{
+    position:relative;flex:0 0 480px;width:480px;height:480px;
+    padding:22px 26px 16px;
+    display:flex;flex-direction:column;
+    color:#F2ECE2;overflow:hidden;
+    background:
+      radial-gradient(120% 62% at 100% 0%, rgba(233,180,76,.10), rgba(233,180,76,0) 62%),
+      linear-gradient(180deg,#101218 0%,#0A0B0E 100%);
+    border-left:1px solid rgba(0,0,0,.6);
+  }
+  .deck{position:absolute;inset:0}
+
+  .slide{
+    position:absolute;inset:0;display:flex;
+    opacity:0;
+    transition:opacity 760ms cubic-bezier(.4,0,.2,1);
+    will-change:opacity;
+    pointer-events:none;
+  }
+  .slide.is-on{opacity:1}
+
+  /* art — full panel height, never cropped */
+  .poster{
+    position:absolute;inset:0;overflow:hidden;
+    background:linear-gradient(155deg,var(--c1) 0%,var(--c2) 100%);
+  }
+  .poster::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(0,0,0,.22) 0%,rgba(0,0,0,0) 26%,rgba(0,0,0,0) 68%,rgba(0,0,0,.34) 100%);
+  }
+  .poster img{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:contain;object-position:center;
+    opacity:0;transition:opacity 480ms ease;
+    -webkit-user-drag:none;
+  }
+  .poster.has-img img{opacity:1}
+  .poster.has-img .fallback{opacity:0}
+
+  .fallback{
+    position:absolute;inset:0;z-index:1;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:0 26px;
+    color:#fff;transition:opacity 400ms ease;
+  }
+  .fallback::before{
+    content:"";position:absolute;inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.28) 1px, rgba(255,255,255,0) 1px);
+    background-size:9px 9px;opacity:.35;
+  }
+  .fb-kicker{
+    position:relative;font-size:7.5px;font-weight:700;letter-spacing:.26em;
+    text-transform:uppercase;color:rgba(255,255,255,.78);
+  }
+  .fb-title{
+    position:relative;margin-top:11px;
+    font-family:Georgia,"Times New Roman","DejaVu Serif",serif;
+    font-size:23px;line-height:1.08;letter-spacing:-.3px;
+    text-shadow:0 1px 14px rgba(0,0,0,.25);
+  }
+  .fb-rule{position:relative;width:26px;height:2px;background:rgba(255,255,255,.72);margin:14px 0}
+  .fb-year{
+    position:relative;font-size:9.5px;letter-spacing:.22em;
+    color:rgba(255,255,255,.82);
+  }
+
+  /* per-slide story — lives in the same right column */
+  .story{position:relative;height:132px;margin-top:auto;z-index:1}
+  .info-slide{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    opacity:0;transition:opacity 760ms cubic-bezier(.4,0,.2,1);
+    will-change:opacity;pointer-events:none;
+  }
+  .info-slide.is-on{opacity:1}
+  .top-line{display:flex;align-items:center;gap:9px}
+  .tag{
+    font-size:8px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;
+    color:#E9B44C;background:rgba(233,180,76,.14);
+    border:1px solid rgba(233,180,76,.32);
+    padding:3px 7px 2px;border-radius:2px;white-space:nowrap;
+  }
+  .meta{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(242,236,226,.42);white-space:nowrap}
+  .title{
+    margin-top:9px;
+    font-family:Georgia,"Times New Roman","DejaVu Serif",serif;
+    font-size:20px;line-height:1.06;letter-spacing:-.3px;
+    color:#F7F2E8;
+    max-height:44px;overflow:hidden;
+  }
+  .synopsis{
+    margin-top:9px;font-size:10.5px;line-height:1.52;
+    color:rgba(242,236,226,.68);overflow:hidden;
+  }
+
+  /* nav + progress */
+  .nav{
+    display:flex;align-items:center;justify-content:space-between;
+    height:38px;margin-top:7px;z-index:2;
+  }
+  .counter{
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    font-size:9.5px;letter-spacing:.16em;color:#948B7E;
+  }
+  .btns{display:flex;gap:8px}
+  .nav-btn{
+    width:40px;height:40px;border-radius:50%;
+    border:1px solid rgba(23,24,28,.16);
+    background:rgba(255,255,255,.55);
+    color:#17181C;font-size:17px;line-height:1;font-family:inherit;
+    display:grid;place-items:center;cursor:pointer;
+    opacity:.7;
+    transition:background 200ms ease,color 200ms ease,border-color 200ms ease,opacity 200ms ease,transform 160ms ease;
+  }
+  .nav-btn:hover,.nav-btn:focus-visible{
+    opacity:1;background:#17181C;color:#F2ECE2;border-color:#17181C;
+  }
+  .nav-btn:active{transform:scale(.93)}
+  .nav-btn:focus{outline:none}
+
+  .bar{
+    position:absolute;left:0;right:0;bottom:0;height:2px;z-index:3;
+    background:rgba(242,236,226,.08);
+  }
+  .bar i{
+    display:block;height:100%;width:0;
+    background:linear-gradient(90deg,#C0902F,#E9B44C);
+  }
+  @keyframes progress{from{width:0}to{width:100%}}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <section class="panel-art" aria-label="Featured media">
+      <div class="deck" id="deck"></div>
+    </section>
+
+    <section class="panel-info" aria-label="Clock, calendar and details">
+      <div>
+        <div class="time-row">
+          <span class="time" id="clockTime">--:--:--</span>
+          <span class="mer" id="clockMer">--</span>
+        </div>
+        <div class="date" id="clockDate">&nbsp;</div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div class="cal">
+        <div class="cal-month" id="calMonth">&nbsp;</div>
+        <div class="cal-dow" id="calDow"></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+
+      <div class="story" id="storyDeck"></div>
+
+      <div class="nav">
+        <span class="counter" id="counter">-- / --</span>
+        <div class="btns">
+          <button class="nav-btn" id="prevBtn" type="button" aria-label="Previous">&#8249;</button>
+          <button class="nav-btn" id="nextBtn" type="button" aria-label="Next">&#8250;</button>
+        </div>
+      </div>
+
+      <div class="bar"><i id="bar"></i></div>
+    </section>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================================================
+     CONTENT — everything on screen comes from kiosk_files/ next to
+     this file. scraper.py saves ONE comic issue and ONE film per
+     minute, each issue as its own entry (Action Comics #1 and #2 are
+     two different slides), and lists them in manifest.js.
+     ============================================================ */
+  var MANIFEST_URL = "kiosk_files/manifest.js";
+  var ROTATE_MS = 60000;
+  var RELOAD_MS = 120000;
+
+  var SEED = [
+    { title: "Action Comics #1", format: "Comic Book", year: 1938, sub: "DC Comics",
+      synopsis: "An infant rocketed from a dying planet is raised in Kansas as Clark Kent — and grows up able to bend steel. In this debut he takes on a corrupt lobbyist and a domestic abuser, inventing the superhero template in thirteen pages." },
+    { title: "The Godfather", format: "Movie", year: 1972, sub: "Dir. Francis Ford Coppola",
+      synopsis: "The aging don of the Corleone family prepares to hand his empire to a son who wants nothing to do with it. When violence strikes, war hero Michael is pulled into the family business one decision at a time." },
+    { title: "Action Comics #2", format: "Comic Book", year: 1938, sub: "DC Comics",
+      synopsis: "A second issue, a second story — the series continues with new crooks and a new rescue, showing how quickly a hit comic found its rhythm issue by issue." },
+    { title: "Jaws", format: "Movie", year: 1975, sub: "Dir. Steven Spielberg",
+      synopsis: "A great white begins feeding on swimmers off Amity Island with the tourist season days away. The police chief, a marine biologist and a grizzled fisherman take to a small boat to hunt it." },
+    { title: "Amazing Spider-Man #1", format: "Comic Book", year: 1963, sub: "Marvel Comics",
+      synopsis: "Peter Parker turns his spider powers to television fame, then learns the cost of standing by while a burglar runs past him in a corridor." },
+    { title: "Star Wars", format: "Movie", year: 1977, sub: "Dir. George Lucas",
+      synopsis: "A moisture farmer on Tatooine buys two droids carrying the stolen plans for an empire's ultimate weapon. The space opera that reset what a blockbuster could be." },
+    { title: "Action Comics #3", format: "Comic Book", year: 1938, sub: "DC Comics",
+      synopsis: "Superman breaks up a racket in a coal town, and a cover that looks nothing like the first two — each issue sold on its own merits at the newsstand." },
+    { title: "Blade Runner", format: "Movie", year: 1982, sub: "Dir. Ridley Scott",
+      synopsis: "In a rain-soaked 2019 Los Angeles, a burnt-out cop is pulled back to work to retire four escaped replicants. Neon noir about memory, mortality and the things we build to serve us." },
+    { title: "Detective Comics #27", format: "Comic Book", year: 1939, sub: "DC Comics",
+      synopsis: "A chemical-soaked mansion, a murdered patriarch and a millionaire playboy who moonlights as a masked vigilante. The Bat-Man's first appearance introduced a brooding detective hero with no powers and no patience." },
+    { title: "Jurassic Park", format: "Movie", year: 1993, sub: "Dir. Steven Spielberg",
+      synopsis: "A billionaire has cloned dinosaurs for a theme park and invites two paleontologists and his grandchildren to see it before opening day. Then the storm hits and the fences fail." }
+  ];
+
+  var PALETTE = [
+    ["#2B4C8C", "#0D1830"], ["#7A1B1B", "#170707"], ["#4A3C6E", "#100C1C"],
+    ["#0E4A5C", "#03171F"], ["#B4331F", "#2A0805"], ["#1E2A6B", "#070A1C"],
+    ["#1D6B8B", "#061A22"], ["#8C2540", "#150409"], ["#1E5F45", "#04140F"],
+    ["#B5501C", "#1E0A03"], ["#A32B2B", "#180505"], ["#20301F", "#050805"],
+    ["#8B6B12", "#160F02"], ["#5B1F6B", "#0E0414"], ["#2F7E7A", "#04191A"],
+    ["#8A6A22", "#150F02"], ["#9C2A16", "#180402"]
+  ];
+
+  function hash(text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) & 0x7fffffff;
+    return h;
+  }
+
+  /* one manifest row = one issue or one film — title, note and image */
+  function normalize(item) {
+    var c = PALETTE[hash(String(item.title || "") + String(item.year || "")) % PALETTE.length];
+    return {
+      title: String(item.title || "Untitled"),
+      format: item.format === "Comic Book" ? "Comic Book" : "Movie",
+      year: item.year || "",
+      publisher: String(item.publisher || ""),
+      sub: String(item.sub || item.publisher || ""),
+      image: item.image || "",
+      synopsis: String(item.synopsis || ""),
+      source: String(item.source || item.image || item.title || ""),
+      c1: c[0], c2: c[1]
+    };
+  }
+
+  var LIB = SEED.map(normalize);      /* everything the scraper has saved */
+  var usingFiles = false;
+  var manifestKey = "";
+
+  /* ============================================================
+     PLAYLIST — a fresh random batch of 20 on every boot.
+       comics  (10): Marvel 3 pre-2015 + 2 from 2015, DC 3 + 2
+       movies  (10): 4 before 2000, 5 from 2000, 1 Filipino
+     Order inside each group is random, but the batch always runs
+     comic - movie - comic - movie. Nothing shown in the last 800
+     slides is picked again; that list lives in localStorage so it
+     survives reboots.
+     ============================================================ */
+  var HISTORY_MAX = 800;
+  var HKEY = "kiosk.history.v1";
+  var NEED = { marvel_old: 3, marvel_new: 2, dc_old: 3, dc_new: 2,
+               film_old: 4, film_new: 5, film_ph: 1 };
+
+  function loadHistory() {
+    try {
+      var a = JSON.parse(window.localStorage.getItem(HKEY) || "[]");
+      return Array.isArray(a) ? a.slice(-HISTORY_MAX) : [];
+    } catch (e) { return []; }
+  }
+  var history = loadHistory();
+  var seen = Object.create(null);
+  history.forEach(function (src) { seen[src] = 1; });
+
+  function remember(src) {
+    if (!src) return;
+    if (seen[src]) {                       /* re-shown: refresh its position */
+      var at = history.indexOf(src);
+      if (at >= 0) history.splice(at, 1);
+    }
+    history.push(src);
+    seen[src] = 1;
+    while (history.length > HISTORY_MAX) delete seen[history.shift()];
+    try { window.localStorage.setItem(HKEY, JSON.stringify(history)); } catch (e) {}
+  }
+
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function bucket(it) {
+    var year = parseInt(it.year, 10) || 0;
+    if (it.format === "Comic Book") {
+      var tag = it.publisher + " " + it.sub;
+      var pub = /marvel/i.test(tag) ? "marvel" : (/\bdc\b/i.test(tag) ? "dc" : "other");
+      return pub + (year >= 2015 ? "_new" : "_old");
+    }
+    if (/filipino/i.test(it.publisher)) return "film_ph";
+    return year < 2000 ? "film_old" : "film_new";
+  }
+
+  function buildBatch() {
+    var groups = {}, taken = Object.create(null);
+    var out = { comic: [], film: [] };
+    var lack = { comic: 0, film: 0 };
+    var pos = Object.create(null);
+    history.forEach(function (s, i) { pos[s] = i; });
+
+    LIB.forEach(function (it) {
+      var b = bucket(it);
+      (groups[b] = groups[b] || []).push(it);
+    });
+    function fresh(list) {
+      return shuffle(list.filter(function (it) { return !seen[it.source] && !taken[it.source]; }));
+    }
+    function take(it, kind) { taken[it.source] = 1; out[kind].push(it); }
+
+    Object.keys(NEED).forEach(function (b) {
+      var kind = b.indexOf("film") === 0 ? "film" : "comic";
+      var got = fresh(groups[b] || []).slice(0, NEED[b]);
+      got.forEach(function (it) { take(it, kind); });
+      lack[kind] += NEED[b] - got.length;
+    });
+
+    /* a bucket ran dry: top up from the same kind (comic / film), unseen
+       first, then whatever was shown longest ago */
+    ["comic", "film"].forEach(function (kind) {
+      if (lack[kind] <= 0) return;
+      var all = LIB.filter(function (it) { return (it.format === "Comic Book") === (kind === "comic"); });
+      var extra = fresh(all).slice(0, lack[kind]);
+      extra.forEach(function (it) { take(it, kind); });
+      lack[kind] -= extra.length;
+      if (lack[kind] > 0) {
+        all.filter(function (it) { return !taken[it.source]; })
+           .sort(function (a, b) { return (pos[a.source] || 0) - (pos[b.source] || 0); })
+           .slice(0, lack[kind])
+           .forEach(function (it) { take(it, kind); });
+      }
+    });
+
+    shuffle(out.comic); shuffle(out.film);
+    var list = [], n = Math.max(out.comic.length, out.film.length);
+    for (var i = 0; i < n; i++) {
+      if (out.comic[i]) list.push(out.comic[i]);
+      if (out.film[i]) list.push(out.film[i]);
+    }
+    return list.map(function (it, i) { return { item: it, n: i + 1, of: list.length }; });
+  }
+
+  var queue = [];      /* rest of the current batch */
+  var timeline = [];   /* what has been on screen, so the back button works */
+  var pos = -1;
+
+  var deck    = document.getElementById("deck");
+  var storyDeck = document.getElementById("storyDeck");
+  var counter = document.getElementById("counter");
+  var bar     = document.getElementById("bar");
+
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+
+  var layers = [document.createElement("div"), document.createElement("div")];
+  layers[0].className = "slide";
+  layers[1].className = "slide";
+  deck.appendChild(layers[0]);
+  deck.appendChild(layers[1]);
+
+  var infos = [document.createElement("div"), document.createElement("div")];
+  infos[0].className = "info-slide";
+  infos[1].className = "info-slide";
+  storyDeck.appendChild(infos[0]);
+  storyDeck.appendChild(infos[1]);
+
+  var active = 0;
+
+  /* the next covers are decoded while the current one is on screen, so a
+     rotation never waits on disk on the Pi */
+  var primed = Object.create(null);
+  function prime(item) {
+    if (!item || !item.image || primed[item.image]) return;
+    primed[item.image] = true;
+    var im = new Image();
+    im.onerror = function () { delete primed[item.image]; };
+    im.src = item.image;
+  }
+
+  function paint(layer, item) {
+    layer.innerHTML =
+      '<div class="poster" style="--c1:' + item.c1 + ';--c2:' + item.c2 + '">' +
+        '<div class="fallback">' +
+          '<div class="fb-kicker">' + item.format + '</div>' +
+          '<div class="fb-title">' + item.title + '</div>' +
+          '<div class="fb-rule"></div>' +
+          '<div class="fb-year">' + item.year + '</div>' +
+        '</div>' +
+        (item.image ? '<img alt="" src="' + item.image + '" decoding="async" draggable="false">' : '') +
+      '</div>';
+
+    var poster = layer.querySelector(".poster");
+    var img = layer.querySelector(".poster img");
+    if (!img) return;
+
+    var tries = 0;
+    function ok() { poster.classList.add("has-img"); }
+    function retry() {
+      if (tries >= 2 || !img.isConnected) return;
+      tries++;
+      window.setTimeout(function () {
+        if (!img.isConnected) return;
+        img.src = item.image + "?r=" + tries;
+      }, tries * 1200);
+    }
+    img.addEventListener("load", ok);
+    img.addEventListener("error", retry);
+    if (img.complete && img.naturalWidth > 0) ok();
+  }
+
+  function paintStory(layer, item) {
+    var meta = [item.year, item.sub].filter(Boolean).join(" &middot; ");
+    layer.innerHTML =
+      '<div class="top-line">' +
+        '<span class="tag">' + item.format + '</span>' +
+        '<span class="meta">' + meta + '</span>' +
+      '</div>' +
+      '<div class="title">' + item.title + '</div>' +
+      '<p class="synopsis">' + item.synopsis + '</p>';
+  }
+
+  /* dir: 1 = next, -1 = back */
+  function show(dir) {
+    if (dir < 0) {
+      if (pos <= 0) return;
+      pos--;
+    } else if (pos + 1 < timeline.length) {
+      pos++;
+    } else {
+      if (!queue.length) queue = buildBatch();
+      var e = queue.shift();
+      if (!e) return;
+      timeline.push(e);
+      if (timeline.length > 40) timeline.shift();
+      pos = timeline.length - 1;
+    }
+
+    var entry = timeline[pos];
+    var item = entry.item;
+    if (usingFiles) remember(item.source);
+
+    var inArt = layers[1 - active];
+    var inStory = infos[1 - active];
+
+    paint(inArt, item);
+    paintStory(inStory, item);
+    if (queue[0]) prime(queue[0].item);
+    if (queue[1]) prime(queue[1].item);
+
+    layers[active].classList.remove("is-on");
+    infos[active].classList.remove("is-on");
+    inArt.classList.add("is-on");
+    inStory.classList.add("is-on");
+    active = 1 - active;
+
+    counter.textContent = pad2(entry.n) + " / " + pad2(entry.of);
+  }
+
+  /* ============================================================
+     MANIFEST — read the folder, never the network
+     ============================================================ */
+  function loadManifest() {
+    var s = document.createElement("script");
+    s.src = MANIFEST_URL + "?t=" + Date.now();
+    s.onload = function () {
+      var data = window.KIOSK_MANIFEST;
+      if (s.parentNode) s.parentNode.removeChild(s);
+      if (!data || !data.items || !data.items.length) return;
+
+      /* the manifest is rewritten every minute, but only rebuild the pool
+         when a new issue or film has actually been added */
+      var key = data.items.length + "@" + (data.updated || "");
+      if (key === manifestKey) return;
+      manifestKey = key;
+
+      var dup = Object.create(null);
+      var pool = data.items.map(normalize).filter(function (it) {
+        if (dup[it.source]) return false;
+        dup[it.source] = 1;
+        return true;
+      });
+
+      LIB = pool;
+      if (!usingFiles) {
+        /* first real manifest: drop the built-in seed slides and start a
+           brand-new random batch */
+        usingFiles = true;
+        primed = Object.create(null);
+        queue = []; timeline = []; pos = -1;
+        show(1);
+        restartTimer();
+      }
+    };
+    s.onerror = function () { if (s.parentNode) s.parentNode.removeChild(s); };
+    document.head.appendChild(s);
+  }
+
+  function armBar() {
+    bar.style.animation = "none";
+    void bar.offsetWidth;
+    bar.style.animation = "progress " + ROTATE_MS + "ms linear forwards";
+  }
+
+  var timerId = null;
+  function restartTimer() {
+    if (timerId) window.clearInterval(timerId);
+    armBar();
+    timerId = window.setInterval(function () {
+      show(1);
+      armBar();
+    }, ROTATE_MS);
+  }
+
+  function next() { show(1); restartTimer(); }
+  function prev() { show(-1); restartTimer(); }
+
+  document.getElementById("nextBtn").addEventListener("click", next);
+  document.getElementById("prevBtn").addEventListener("click", prev);
+
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
+  });
+
+  /* ============================================================
+     CLOCK + CALENDAR
+     ============================================================ */
+  var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var MONTHS = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"];
+  var DOW = ["S", "M", "T", "W", "T", "F", "S"];
+
+  var timeEl  = document.getElementById("clockTime");
+  var merEl   = document.getElementById("clockMer");
+  var dateEl  = document.getElementById("clockDate");
+  var monthEl = document.getElementById("calMonth");
+  var dowEl   = document.getElementById("calDow");
+  var gridEl  = document.getElementById("calGrid");
+
+  dowEl.innerHTML = DOW.map(function (d) { return "<span>" + d + "</span>"; }).join("");
+
+  var builtMonth = -1, builtDay = -1, builtYear = -1;
+
+  function buildCalendar(d) {
+    var y = d.getFullYear(), m = d.getMonth();
+    monthEl.textContent = MONTHS[m].toUpperCase() + "  " + y;
+
+    var firstDow = new Date(y, m, 1).getDay();
+    var total = new Date(y, m + 1, 0).getDate();
+    var today = d.getDate();
+    var out = "";
+    var i;
+
+    for (i = 0; i < firstDow; i++) out += '<span class="cal-cell"></span>';
+
+    for (var day = 1; day <= total; day++) {
+      var dow = (firstDow + day - 1) % 7;
+      var cls = "cal-cell";
+      if (dow === 0 || dow === 6) cls += " is-weekend";
+      if (day === today) cls += " is-today";
+      out += '<span class="' + cls + '">' + day + "</span>";
+    }
+
+    /* always six week-rows so the layout never shifts between months */
+    var used = firstDow + total;
+    for (i = used; i < 42; i++) out += '<span class="cal-cell"></span>';
+
+    gridEl.innerHTML = out;
+    builtMonth = m; builtDay = today; builtYear = y;
+  }
+
+  function tick() {
+    var d = new Date();
+
+    var h = d.getHours();
+    var mer = h >= 12 ? "PM" : "AM";
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+
+    var t = pad2(h12) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+    if (timeEl.textContent !== t) timeEl.textContent = t;
+    if (merEl.textContent !== mer) merEl.textContent = mer;
+
+    var ds = WEEKDAYS[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate();
+    if (dateEl.textContent !== ds) dateEl.textContent = ds;
+
+    if (d.getMonth() !== builtMonth || d.getDate() !== builtDay || d.getFullYear() !== builtYear) {
+      buildCalendar(d);
+    }
+  }
+
+  /* ============================================================
+     FIXED 800x480 STAGE
+     ============================================================ */
+  var stage = document.getElementById("stage");
+  function fitStage() {
+    var s = Math.min(window.innerWidth / 800, window.innerHeight / 480);
+    if (!isFinite(s) || s <= 0) s = 1;
+    stage.style.transform = "translate(-50%,-50%) scale(" + s + ")";
+  }
+  window.addEventListener("resize", fitStage);
+
+  /* ============================================================
+     BOOT
+     ============================================================ */
+  fitStage();
+  tick();
+  window.setInterval(tick, 1000);
+
+  show(1);
+  restartTimer();
+
+  loadManifest();
+  window.setInterval(loadManifest, RELOAD_MS);
+
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); }, { passive: false });
+})();
+</script>
+</body>
+</html>
